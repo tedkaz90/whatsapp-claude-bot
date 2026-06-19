@@ -477,6 +477,18 @@ app.get('/logs', async (req, res) => {
   }
 });
 
+// Reset conversation history for a phone number (testing only)
+// GET /reset-history?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
+app.get('/reset-history', async (req, res) => {
+  if (req.query.key !== process.env.WEBHOOK_VERIFY_TOKEN) {
+    return res.status(403).send('Forbidden');
+  }
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).send('Missing phone param');
+  await redis.del(`history:${phone}`);
+  res.status(200).send(`Conversation history cleared for ${phone}`);
+});
+
 // Reset order-sent flag for a phone number (testing only)
 // GET /reset-order?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
 app.get('/reset-order', async (req, res) => {
