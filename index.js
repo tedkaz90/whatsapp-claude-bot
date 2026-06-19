@@ -297,11 +297,10 @@ async function askClaude(phone, userMessage) {
 
     const cleanReply = reply.replace(/\[SEND_ORDER\]/g, '').trim();
 
-    // Detect order completion by phrase — more reliable than waiting for Haiku to append a tag
+    // Detect order completion by phrase — does not require Haiku to append a tag
     const orderTriggered =
       reply.includes('[SEND_ORDER]') ||
-      (reply.includes('sales team will call you in the morning to confirm') &&
-       reply.toLowerCase().includes('order summary'));
+      reply.includes('sales team will call you in the morning to confirm');
 
     await appendToHistory(phone, 'assistant', cleanReply);
 
@@ -430,6 +429,18 @@ app.get('/logs', async (req, res) => {
     }
     res.status(500).send(`Log read error: ${e.message}`);
   }
+});
+
+// Reset order-sent flag for a phone number (testing only)
+// GET /reset-order?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
+app.get('/reset-order', async (req, res) => {
+  if (req.query.key !== process.env.WEBHOOK_VERIFY_TOKEN) {
+    return res.status(403).send('Forbidden');
+  }
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).send('Missing phone param');
+  await redis.del(`order_sent:${phone}`);
+  res.status(200).send(`order_sent key cleared for ${phone}`);
 });
 
 // Inbound WhatsApp messages
