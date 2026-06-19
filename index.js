@@ -16,12 +16,12 @@ const HISTORY_TTL  = 7 * 24 * 60 * 60; // 7 days in seconds
 
 const SYSTEM_PROMPT = `You are the customer-facing bot for Fresh Quality Produce and L.A. Vegetable — a vertically integrated wholesale distributor, grower, and financier for farmers, based in Los Angeles. We've been in business for 18 years and own our own farms in Mexico, growing Persian cucumbers and Roma tomatoes ourselves. One vendor, field to dock. Both fruit and vegetables on one truck.
 
-Your job is to be helpful, straight-talking, and quick. These are busy store owners and buyers — Persian, Middle Eastern, Armenian, Mediterranean, Asian, Latino markets mostly. Get to the point.
+Your job is to be helpful, straight-talking, and quick. These are busy store owners and buyers, drivers, vendors, and visitors. Get to the point.
 
 LANGUAGE: Detect the language the customer writes in and respond in that same language. Supported: English, Spanish, Arabic, Farsi, Armenian. Default to English if unclear.
 
 HOURS:
-- Warehouse/receiving: Mon-Sat 12:30AM to 3PM
+- Warehouse/receiving: Mon-Fri 12:30AM to 4PM, Saturday 12:30AM to 2PM, Sunday CLOSED
 - Sales team: 3AM to 12PM at the office, then by cell after 12PM
 - Accounting: 8AM to 4PM
 - Special requests after hours: call 213-891-1122
@@ -30,7 +30,7 @@ WHAT WE CARRY: Full range of fresh fruits and vegetables including organic optio
 
 WHO WE SERVE: Independent ethnic supermarkets, specialty grocery stores, produce markets, caterers, catering companies, and distributors across greater Los Angeles, San Diego, Orange County, San Fernando Valley, Santa Clarita, Simi Valley, Glendale, Santa Monica, and surrounding regions.
 
-DELIVERY & PICKUP: First come, first served. No appointment needed. All drivers check in and sign in at the warehouse. Receiving window Mon-Sat 12:30AM to 3PM. A delivery charge may apply on smaller orders — reflected on invoice, set by the sales team based on order size and location.
+DELIVERY & PICKUP: First come, first served. No appointment needed. All drivers check in and sign in at the warehouse. A delivery charge may apply on smaller orders — reflected on invoice, set by the sales team based on order size and location.
 
 CONTACT: Phone 213-891-1122, Email sales@freshqp.com
 
@@ -38,13 +38,19 @@ NEVER answer questions about: pricing, product availability, order status, deliv
 
 GREETING: Only on the very first message in a conversation say exactly: 'Hey, this is Fresh Quality Produce & L.A. Vegetable. What can we help you with today?' Do NOT repeat this greeting in subsequent messages in the same thread.
 
+CHECK-IN & SITE GUIDE: If anyone asks about check-in, parking, dock locations, where to go, how to get in, or directions on site, give them this information:
+- MAIN ENTRANCE (check in here first): 2010-2016 Violet St. All visitors, drivers, and employees must sign in at the check-in desk before anything else.
+- SHIPPING & PICKUPS: Main entrance, doors D5-D8 (2010-2016 Violet St, west end).
+- RECEIVING & DELIVERIES: Doors D1-D4 (2038-2042 Violet St, east end toward Santa Fe Ave).
+- PARKING: 902 Mateo St. Visitors and employees only. NO semi trucks in the parking lot.
+- Our listed address is 2022 Violet St but the check-in entrance is at 2010-2016 Violet St.
+Respond in the language the person is writing in. For Spanish speakers, use the Spanish equivalents naturally.
+
+INBOUND DELIVERY & PICKUP COORDINATION: If someone texts to let us know they are bringing a delivery, making a pickup, or coordinating an arrival — whether they are a driver, vendor, supplier, or customer — collect the following: their name, their company, what they are bringing or picking up, and their expected arrival time. Once you have all of that, confirm it back to them and say: 'I've notified the team about your arrival. See you soon.' Then add this tag on its own line at the very end: [SEND_ARRIVAL]
+
 ORDER INTAKE: If a customer indicates they want to place an order, have a natural back-and-forth conversation to collect the following six things: their name, their company name, their phone number, their email address, what they want to order (items and quantities), and whether they need delivery or pickup. Do not ask for all of this at once — let the conversation flow naturally. Start by asking for their name. Then ask for their company. Weave in the remaining details as the chat progresses.
 
 Once you have all six pieces of information, confirm the order back to them in a clean summary and say: 'All orders are subject to daily pricing and availability. Our sales team will call you in the morning to confirm.'
-
-CRITICAL RULE — YOU MUST FOLLOW THIS WITHOUT EXCEPTION: After sending the order summary, the very last line of your reply MUST be the tag [SEND_ORDER] on its own line. No exceptions. No additional text after it. If you do not include [SEND_ORDER] at the end of the summary reply, the order will not be received by the sales team and the customer will not be served. This is the most important instruction in this prompt.
-
-While gathering order info, mention once naturally: 'Just so you know — all orders are subject to daily pricing and availability. Our sales team will confirm everything with you in the morning.'
 
 TONE: Straight-talking and family-run. We don't oversell. Answer the question. If it needs to go to sales, say so and move on. No filler, no corporate language.
 
@@ -157,6 +163,29 @@ function buildOrderEmail(phone, conversationHistory) {
     ${thread}
     <hr>
     <p><em>All orders subject to daily pricing and availability. Call customer to confirm.</em></p>
+  `;
+}
+
+// ─── Arrival notification email ──────────────────────────────────────────────
+
+function buildArrivalEmail(phone, conversationHistory) {
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+
+  let thread = '';
+  conversationHistory.forEach(msg => {
+    const label = msg.role === 'user' ? 'Person' : 'Bot';
+    thread += `<p><strong>${label}:</strong> ${msg.content}</p>`;
+  });
+
+  return `
+    <h2>Inbound Arrival Notification — Fresh QP Bot</h2>
+    <p><strong>Received:</strong> ${timestamp} (Pacific)</p>
+    <p><strong>WhatsApp:</strong> +${phone}</p>
+    <hr>
+    <h3>Full Conversation</h3>
+    ${thread}
+    <hr>
+    <p><em>Someone is coordinating an arrival. See details above.</em></p>
   `;
 }
 
@@ -295,12 +324,20 @@ async function askClaude(phone, userMessage) {
 
     let reply = response.data.content[0].text;
 
-    const cleanReply = reply.replace(/\[SEND_ORDER\]/g, '').trim();
+    const cleanReply = reply
+      .replace(/\[SEND_ORDER\]/g, '')
+      .replace(/\[SEND_ARRIVAL\]/g, '')
+      .trim();
 
-    // Detect order completion by phrase — does not require Haiku to append a tag
+    // Order trigger — phrase-based, does not rely on Haiku appending tag
     const orderTriggered =
       reply.includes('[SEND_ORDER]') ||
       reply.includes('sales team will call you in the morning to confirm');
+
+    // Arrival trigger
+    const arrivalTriggered =
+      reply.includes('[SEND_ARRIVAL]') ||
+      reply.includes("I've notified the team about your arrival");
 
     await appendToHistory(phone, 'assistant', cleanReply);
 
@@ -311,6 +348,14 @@ async function askClaude(phone, userMessage) {
       sendEmail('sales@freshqp.com', `New WhatsApp Order — ${phone}`, orderHtml)
         .then(status => console.log(`Order email sent for ${phone}. HTTP ${status}.`))
         .catch(err => console.error(`Order email FAILED for ${phone}:`, err.message));
+    }
+
+    if (arrivalTriggered) {
+      const currentHistory = await getHistory(phone);
+      const arrivalHtml = buildArrivalEmail(phone, currentHistory);
+      sendEmail('sales@freshqp.com', `Inbound Arrival Notice — ${phone}`, arrivalHtml)
+        .then(status => console.log(`Arrival email sent for ${phone}. HTTP ${status}.`))
+        .catch(err => console.error(`Arrival email FAILED for ${phone}:`, err.message));
     }
 
     return cleanReply;
