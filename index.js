@@ -295,8 +295,13 @@ async function askClaude(phone, userMessage) {
 
     let reply = response.data.content[0].text;
 
-    const orderTriggered = reply.includes('[SEND_ORDER]');
     const cleanReply = reply.replace(/\[SEND_ORDER\]/g, '').trim();
+
+    // Detect order completion by phrase — more reliable than waiting for Haiku to append a tag
+    const orderTriggered =
+      reply.includes('[SEND_ORDER]') ||
+      (reply.includes('sales team will call you in the morning to confirm') &&
+       reply.toLowerCase().includes('order summary'));
 
     await appendToHistory(phone, 'assistant', cleanReply);
 
