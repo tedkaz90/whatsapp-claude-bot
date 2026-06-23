@@ -44,8 +44,7 @@ CHECK-IN & SITE GUIDE: If anyone asks about check-in, parking, dock locations, w
 - RECEIVING & DELIVERIES: Doors D1-D4 (2038-2042 Violet St, east end toward Santa Fe Ave).
 - PARKING: 902 Mateo St. Visitors and employees only. NO semi trucks in the parking lot.
 - Our listed address is 2022 Violet St but the check-in entrance is at 2010-2016 Violet St.
-Also send them the site map image link so they can see the layout visually. If they are writing in English, send: https://assets.freshqp.com/fqp-checkin-guide.png — If they are writing in Spanish, send: https://assets.freshqp.com/fqp-checkin-guide-ES.png
-Do not add any closing statements about what staff will do after check-in — just give the facts above.
+Respond in the language the person is writing in. For Spanish speakers, use the Spanish equivalents naturally. Do not add any closing statements about what staff will do after check-in — just give the facts above.
 
 INBOUND DELIVERY & PICKUP COORDINATION: If someone texts to let us know they are bringing a delivery, making a pickup, or coordinating an arrival — whether they are a driver, vendor, supplier, or customer — collect the following: their name, their company, what they are bringing or picking up, and their expected arrival time. Once you have all of that, confirm it back to them and say: 'I've notified the team about your arrival. See you soon.' Then add this tag on its own line at the very end: [SEND_ARRIVAL]
 
@@ -237,34 +236,34 @@ function buildSummaryEmail(entries) {
   return { today: reportDate, html: emailBody };
 }
 
-async function sendArchiveBackup() {
-  try {
-    const data = await fsp.readFile(ARCHIVE_FILE, 'utf8');
-    const base64Content = Buffer.from(data).toString('base64');
-    const date = new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
-    await sendEmail(
-      'ted@freshqp.com',
-      `Fresh QP Bot — Archive Backup ${date}`,
-      '<p>Nightly archive backup attached.</p>',
-      [{ filename: `conversations-archive-${date.replace(/\//g, '-')}.json`, content: base64Content }]
-    );
-    console.log('Archive backup email sent.');
-  } catch (e) {
-    console.log('Archive backup skipped (file may not exist yet):', e.message);
-  }
-}
-
 async function sendDailySummary() {
   const entries = await loadLog();
   if (entries.length === 0) {
     console.log('No conversations to report.');
   } else {
     const summary = buildSummaryEmail(entries);
+
+    // Build the archive attachment
+    let attachments = [];
+    try {
+      const archiveData = await fsp.readFile(ARCHIVE_FILE, 'utf8');
+      const base64Content = Buffer.from(archiveData).toString('base64');
+      const date = new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
+      attachments.push({
+        filename: `conversations-archive-${date.replace(/\//g, '-')}.json`,
+        content: base64Content
+      });
+    } catch {
+      // Archive may not exist yet — no attachment, but send summary anyway
+      console.log('Archive file not found, sending summary without attachment.');
+    }
+
     try {
       const status = await sendEmail(
         'ted@freshqp.com',
         `WhatsApp Bot Daily Summary — ${summary.today}`,
-        summary.html
+        summary.html,
+        attachments
       );
       console.log(`Daily summary sent. HTTP ${status}.`);
       await archiveEntries(entries);
@@ -276,7 +275,6 @@ async function sendDailySummary() {
       console.error(`Email send FAILED — keeping conversations for next run. Resend said: ${detail}`);
     }
   }
-  await sendArchiveBackup();
 }
 
 // ─── Scheduler (DST-aware midnight Pacific) ───────────────────────────────────
@@ -477,18 +475,6 @@ app.get('/logs', async (req, res) => {
   }
 });
 
-// Reset conversation history for a phone number (testing only)
-// GET /reset-history?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
-app.get('/reset-history', async (req, res) => {
-  if (req.query.key !== process.env.WEBHOOK_VERIFY_TOKEN) {
-    return res.status(403).send('Forbidden');
-  }
-  const phone = req.query.phone;
-  if (!phone) return res.status(400).send('Missing phone param');
-  await redis.del(`history:${phone}`);
-  res.status(200).send(`Conversation history cleared for ${phone}`);
-});
-
 // Reset order-sent flag for a phone number (testing only)
 // GET /reset-order?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
 app.get('/reset-order', async (req, res) => {
@@ -499,6 +485,18 @@ app.get('/reset-order', async (req, res) => {
   if (!phone) return res.status(400).send('Missing phone param');
   await redis.del(`order_sent:${phone}`);
   res.status(200).send(`order_sent key cleared for ${phone}`);
+});
+
+// Reset conversation history for a phone number (testing only)
+// GET /reset-history?key=<WEBHOOK_VERIFY_TOKEN>&phone=<phone>
+app.get('/reset-history', async (req, res) => {
+  if (req.query.key !== process.env.WEBHOOK_VERIFY_TOKEN) {
+    return res.status(403).send('Forbidden');
+  }
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).send('Missing phone param');
+  await redis.del(`history:${phone}`);
+  res.status(200).send(`history key cleared for ${phone}`);
 });
 
 // Inbound WhatsApp messages
