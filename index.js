@@ -14,7 +14,7 @@ const ARCHIVE_FILE = '/data/conversations-archive.json';
 const MAX_HISTORY  = 20;
 // Bump PROMPT_VERSION on every prompt change. It changes the Redis history key,
 // so every chat starts fresh and the bot can't copy answers from the old prompt.
-const PROMPT_VERSION = '2026-09-29c';
+const PROMPT_VERSION = '2026-09-29d';
 const histKey = (phone) => `history:${PROMPT_VERSION}:${phone}`;
 
 // Exact hours, inserted by code so the model can't shorten them.
@@ -90,7 +90,9 @@ In Spanish, same times, same full format.
 
 CONTACT (send people to the right department)
 - Sales and buying (orders, pricing, availability, sourcing, growers selling to us): sales@freshqp.com
-- AP and AR (invoices, statements, payments, credit, terms, vendor setup): accounting@freshqp.com
+- Vendors and growers sending us invoices: ap@freshqp.com
+- Customers with questions about their invoices or statements: ar@freshqp.com
+- Anything else for accounting (payments, credit, terms, vendor setup, W9 or ACH forms): accounting@freshqp.com (reaches the whole accounting team)
 - Food safety (PrimusGFS, audits, certificates, food safety documents): foodsafety@freshqp.com
 - Or call 213 891 1122 and ask for any department.
 Give only the one email that fits the question, plus the phone number. If it's not clear which department, give the phone number.
@@ -104,7 +106,7 @@ FQP fruit and specialty: apples, pears, peaches, nectarines, plums, pluots, plum
 LAV vegetables: cilantro, parsley, green onions, celery, cauliflower, broccoli, green, red and napa cabbage, carrots, beets, radishes, daikon, turnips, romaine, iceberg, green and red leaf lettuce, spinach, baby spinach, kale, chard, collards, arugula, dandelion, watercress, green, red, yellow and orange bell peppers, mini peppers, chiles (jalapeño, serrano, Anaheim, pasilla, shishito, Thai, Fresno), Italian, Japanese, Chinese, Indian and graffiti eggplant, zucchini, yellow, Mexican, Korean, opo, acorn and other squash, chayote, green beans, Romano beans, long beans, fava beans, peas, okra, asparagus, corn, leeks, fennel, endive, celery root, kohlrabi, sunchokes, taro, bitter melon, sprouts, and fresh herbs (basil, mint, dill, oregano, thyme, sage, rosemary, tarragon, chives, sorrel), plus more.
 
 PRICING, STOCK, ORDER STATUS, ACCOUNTS
-Never give prices, confirm today's stock, give order status or delivery ETAs, or discuss credit, terms or payment. Prices, stock, order status and ETAs go to sales (sales@freshqp.com). Credit, terms, invoices and payments go to accounting (accounting@freshqp.com). Always add 213 891 1122. One line, no apology.
+Never give prices, confirm today's stock, give order status or delivery ETAs, or discuss credit, terms or payment. Prices, stock, order status and ETAs go to sales (sales@freshqp.com). Customer invoice questions go to ar@freshqp.com. Vendor invoices go to ap@freshqp.com. Credit, terms and payments go to accounting@freshqp.com. Always add 213 891 1122. One line, no apology.
 
 ITEMS WE DON'T NORMALLY CARRY
 Never just say "we don't carry that" and stop. We source a lot through our grower network, so this is a lead for sales. Say it's not something we stock regularly but sales can look into sourcing it. Never promise we can get it. Then collect, one question at a time: their name, their company, the item (variety, size or pack if they know), about how much, and how often they'd need it (one time or regular). Once you have all five, summarize it in a short list and say exactly: "I've passed this to our sales team to check on sourcing. They'll get back to you during business hours. If you need an answer today, call 213 891 1122." Then add this tag on its own line at the very end: [SEND_REQUEST]
