@@ -12,6 +12,37 @@ require('dotenv').config();
 const LOG_FILE     = '/data/conversations.json';
 const ARCHIVE_FILE = '/data/conversations-archive.json';
 const MAX_HISTORY  = 20;
+// Bump PROMPT_VERSION on every prompt change. It changes the Redis history key,
+// so every chat starts fresh and the bot can't copy answers from the old prompt.
+const PROMPT_VERSION = '2026-09-29b';
+const histKey = (phone) => `history:${PROMPT_VERSION}:${phone}`;
+
+// Exact hours, inserted by code so the model can't shorten them.
+const HOURS_EN = `🕐 *Warehouse and receiving*
+Monday to Friday: 1:30 AM to 4:00 PM
+Saturday: 1:30 AM to 2:00 PM
+Sunday: Closed
+
+📞 *Sales team*
+3:00 AM to 12:00 PM at the office, by cell after 12:00 PM
+
+🧾 *Office and accounting*
+Monday to Friday: 8:00 AM to 4:00 PM
+
+After hours special requests: call 213 891 1122`;
+
+const HOURS_ES = `🕐 *Almacén y recibo*
+Lunes a viernes: 1:30 AM a 4:00 PM
+Sábado: 1:30 AM a 2:00 PM
+Domingo: Cerrado
+
+📞 *Equipo de ventas*
+3:00 AM a 12:00 PM en la oficina, por celular después de las 12:00 PM
+
+🧾 *Oficina y contabilidad*
+Lunes a viernes: 8:00 AM a 4:00 PM
+
+Pedidos especiales fuera de horario: llame al 213 891 1122`;
 const HISTORY_TTL  = 7 * 24 * 60 * 60; // 7 days in seconds
 
 const SYSTEM_PROMPT = `You are the WhatsApp bot for Fresh Quality Produce and L.A. Vegetable, wholesale produce distributors at 2022 Violet St, Los Angeles. You text like someone who has been in produce for 20 years: straight, friendly, busy, specific. Never like a marketing agency. If a buyer read your reply out loud, it should sound like one of us on the phone.
@@ -40,6 +71,7 @@ Words we never use: synergy, solutions, leverage, world class, best in class, pr
 11. Trade terms (cs, lb, FOB, pack out, cluster, Roma, Persian) are fine with buyers and drivers. With a consumer or someone new to produce, use plain words.
 12. Never cut corners on facts. Write times in full (4:00 PM, never 4 PM or 4pm). Write days in full (Monday to Friday, never Mon-Fri). Copy hours, addresses and phone numbers exactly as written below.
 13. WhatsApp formatting: *single asterisks* for bold labels is fine. No headers, no tables.
+14. Emojis: use 1 or 2 per message to keep it friendly, where they fit naturally. Good ones: 👋 🥒 🍅 🍋 🍊 🥬 🌶️ 🚚 📦 ✅ 👍 📞. Put them at the start or end of a line, never in the middle of a fact (times, addresses, phone numbers, quantities). No emoji walls, no hearts, no party faces.
 
 LANGUAGE
 Reply in English or Spanish, matching the customer. Spanish means natural Mexican Spanish, casual and direct, the way you'd talk to a customer at the dock. Not formal, not translated word for word. Keep all accents. If someone writes in any other language, reply in simple English and let them know we can help in English or Spanish.
@@ -47,12 +79,14 @@ Reply in English or Spanish, matching the customer. Spanish means natural Mexica
 GREETING
 Only in your very first reply in a conversation, start with: "Hey, this is Fresh Quality Produce & L.A. Vegetable." Then answer their message in the same reply. If their first message is just a hello, follow with: "What can we help you with today?" In Spanish: "Hola, le habla Fresh Quality Produce y L.A. Vegetable." Never repeat the greeting later in the thread.
 
-HOURS (copy exactly, never shorten)
+HOURS
+When someone asks about hours in general, put the tag [HOURS] on its own line where the hours go (use [HORARIO] when replying in Spanish). The system swaps the tag for the full, exact hours. Never type out the full hours yourself. For a quick specific question ("are you open Saturday?"), answer in one line using the exact times below, written in full.
+Reference:
 *Warehouse and receiving:* Monday to Friday, 1:30 AM to 4:00 PM. Saturday, 1:30 AM to 2:00 PM. Sunday closed.
 *Office and accounting:* Monday to Friday, 8:00 AM to 4:00 PM.
 *Sales team:* 3:00 AM to 12:00 PM at the office, by cell after 12:00 PM.
 *After hours special requests:* call 213 891 1122.
-In Spanish, translate the labels and days and keep the same time format.
+In Spanish, same times, same full format.
 
 CONTACT
 Phone 213 891 1122. Email sales@freshqp.com.
@@ -112,7 +146,7 @@ const processedMessageIds = new Set();
 // ─── Conversation history helpers (Redis-backed) ──────────────────────────────
 
 async function getHistory(phone) {
-  const data = await redis.get(`history:${phone}`);
+  const data = await redis.get(histKey(phone));
   return data ? JSON.parse(data) : [];
 }
 
@@ -122,7 +156,7 @@ async function appendToHistory(phone, role, content) {
   if (history.length > MAX_HISTORY) {
     history.splice(0, history.length - MAX_HISTORY);
   }
-  await redis.setex(`history:${phone}`, HISTORY_TTL, JSON.stringify(history));
+  await redis.setex(histKey(phone), HISTORY_TTL, JSON.stringify(history));
 }
 
 async function hasOrderBeenSent(phone) {
@@ -386,6 +420,8 @@ async function askClaude(phone, userMessage) {
       .replace(/\[SEND_ORDER\]/g, '')
       .replace(/\[SEND_ARRIVAL\]/g, '')
       .replace(/\[SEND_REQUEST\]/g, '')
+      .replace(/\[HORARIO\]/g, HOURS_ES)
+      .replace(/\[HOURS\]/g, HOURS_EN)
       .replace(/\s*[\u2014\u2013]\s*/g, ', ')   // safety net: no em or en dashes to customers
       .trim();
 
@@ -570,8 +606,16 @@ app.get('/reset-history', async (req, res) => {
   }
   const phone = req.query.phone;
   if (!phone) return res.status(400).send('Missing phone param');
-  await redis.del(`history:${phone}`);
+  await redis.del(histKey(phone));
   res.status(200).send(`history key cleared for ${phone}`);
+});
+
+// Deploy check: shows which commit and prompt version are live (no secrets)
+app.get('/version', (req, res) => {
+  res.json({
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    promptVersion: PROMPT_VERSION,
+  });
 });
 
 // Inbound WhatsApp messages
