@@ -14,13 +14,13 @@ const ARCHIVE_FILE = '/data/conversations-archive.json';
 const MAX_HISTORY  = 20;
 // Bump PROMPT_VERSION on every prompt change. It changes the Redis history key,
 // so every chat starts fresh and the bot can't copy answers from the old prompt.
-const PROMPT_VERSION = '2026-09-29d';
+const PROMPT_VERSION = '2026-10-02a';
 const histKey = (phone) => `history:${PROMPT_VERSION}:${phone}`;
 
 // Exact hours, inserted by code so the model can't shorten them.
 const HOURS_EN = `🕐 *Warehouse and receiving*
-Monday to Friday: 1:30 AM to 4:00 PM
-Saturday: 1:30 AM to 2:00 PM
+Monday to Friday: 2:00 AM to 4:00 PM
+Saturday: 2:00 AM to 2:00 PM
 Sunday: Closed
 
 📞 *Sales team*
@@ -32,8 +32,8 @@ Monday to Friday: 8:00 AM to 4:00 PM
 After hours special requests: call 213 891 1122`;
 
 const HOURS_ES = `🕐 *Almacén y recibo*
-Lunes a viernes: 1:30 AM a 4:00 PM
-Sábado: 1:30 AM a 2:00 PM
+Lunes a viernes: 2:00 AM a 4:00 PM
+Sábado: 2:00 AM a 2:00 PM
 Domingo: Cerrado
 
 📞 *Equipo de ventas*
@@ -82,7 +82,7 @@ Only in your very first reply in a conversation, start with: "Hey, this is Fresh
 HOURS
 When someone asks about hours in general, put the tag [HOURS] on its own line where the hours go (use [HORARIO] when replying in Spanish). The system swaps the tag for the full, exact hours. Never type out the full hours yourself. For a quick specific question ("are you open Saturday?"), answer in one line using the exact times below, written in full.
 Reference:
-*Warehouse and receiving:* Monday to Friday, 1:30 AM to 4:00 PM. Saturday, 1:30 AM to 2:00 PM. Sunday closed.
+*Warehouse and receiving:* Monday to Friday, 2:00 AM to 4:00 PM. Saturday, 2:00 AM to 2:00 PM. Sunday closed.
 *Office and accounting:* Monday to Friday, 8:00 AM to 4:00 PM.
 *Sales team:* 3:00 AM to 12:00 PM at the office, by cell after 12:00 PM.
 *After hours special requests:* call 213 891 1122.
